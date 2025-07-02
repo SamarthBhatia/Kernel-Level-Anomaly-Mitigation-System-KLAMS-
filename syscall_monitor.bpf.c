@@ -68,4 +68,4 @@ int trace_socket(struct trace_event_raw_sys_enter *ctx){
     return 0;
 }
 
-char LICENSE[] SEC("LICENSE") = "GPL" // License for the BPF program, like a permission slip for using it
+char LICENSE[] SEC("LICENSE") = "GPL"; // License for the BPF program, like a permission slip for using it
