@@ -38,7 +38,7 @@ print("Monitoring for process injection and network activity...\n")
 
 try:
     while True:
-        b_ring_buffer_poll() # Poll the ring buffer for events
+        b.ring_buffer_poll() # Poll the ring buffer for events
         time.sleep(1) # Sleep for a while to avoid busy waiting
 except KeyboardInterrupt:
     print("\nMonitor stopped")
