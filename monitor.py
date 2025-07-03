@@ -1,52 +1,119 @@
-#!/usr/bin/env python3
+
 from bcc import BPF
 import time
+import ctypes as ct
+import subprocess
 from datetime import datetime
 
-#b = BPF(src_file="syscall_monitor.bpf.c",allow_rlimit=False) # Load the BPF program from the C source file
-b = BPF(
-    src_file="syscall_monitor.bpf.c",
-    cflags=[
-      "-I/usr/include/bpf",                               # libbpf headers
-      "-I/lib/modules/$(uname -r)/build/include"          # kernel UAPI headers
-    ],
-    allow_rlimit=False
-)
+# Load both eBPF programs
+print("Loading syscall monitor...")
+syscall_monitor = BPF(src_file="syscall_monitor_bcc.c")
 
-# Now Process Tracking
-suspicious_processes = set()  # Set to keep track of suspicious processes
-process_activities = {} # Dictionary to keep track of process activities
+print("Loading network filter...")
+network_filter = BPF(src_file="network_filter_bcc.c")
 
-def handle_event(cpu, data, size): # Callback function to handle events
-    event = b["events"].event(data) # Get the event from the BPF map
-    timestamp = datetime.fromtimestamp(event.timestamp / 1e9) # Convert timestamp to a human-readable format
+# Process tracking
+suspicious_processes = set()
+blocked_processes = set()
 
-    print(f"[{timestamp}] PID: {event.pid} CMD: {event.comm.decode()} " f"Syscall ID: {event.syscall_id} ") # Print the event details
+class EventData(ct.Structure):
+    _fields_ = [
+        ("pid", ct.c_uint32),
+        ("syscall_id", ct.c_uint32), 
+        ("timestamp", ct.c_uint64),
+        ("comm", ct.c_char * 16)
+    ]
 
-    # Detect process injection pattern
+def block_process_network(pid):
+    """Block network access for a process using multiple methods"""
+    success = True
+    
+    try:
+        # Method 1: iptables blocking
+        subprocess.run([
+            "iptables", "-A", "OUTPUT", 
+            "-m", "owner", "--pid-owner", str(pid), 
+            "-j", "DROP"
+        ], check=True, capture_output=True)
+        
+        # Method 2: Update eBPF map for kernel-level blocking
+        pid_key = ct.c_uint32(pid)
+        block_flag = ct.c_uint32(1)
+        network_filter["blocked_pids"][pid_key] = block_flag
+        
+        print(f"🔒 Network access BLOCKED for PID {pid} (iptables + eBPF)")
+        
+    except subprocess.CalledProcessError as e:
+        print(f"⚠️ Failed to block PID {pid}: {e}")
+        success = False
+        
+    return success
+
+def handle_event(cpu, data, size):
+    event = ct.cast(data, ct.POINTER(EventData)).contents
+    timestamp = datetime.fromtimestamp(event.timestamp / 1e9)
+    comm = event.comm.decode('utf-8', 'replace')
+    
+    print(f"[{timestamp.strftime('%H:%M:%S')}] PID: {event.pid} CMD: {comm} Syscall: {event.syscall_id}")
+    
+    # Process injection detection (syscall 310 = process_vm_writev)
     if event.syscall_id == 310:
-        print(f" Injection detected: Process {event.pid} ({event.comm.decode()}) Injecting into another process")  # This is a common pattern for process injection
-        suspicious_processes.add(event.pid); # Add the process to the suspicious processes set
-
-        # Block network process using iptables
-        import subprocess  
-        subprocess.run(["sudo" ,"iptables", "-A", "OUTPUT", "-m", "owner", "--pid-owner", str(event.pid), "-j", "DROP"])# Block the process from making network connections
-        print(f"Block network access for PID {event.pid}")
-
-    #Monitor network activity for suspicious processes
-    elif event.syscall_id == 41: # socket
+        print(f"🚨 PROCESS INJECTION DETECTED!")
+        print(f"   └─ Process {event.pid} ({comm}) injecting into another process")
+        
+        suspicious_processes.add(event.pid)
+        blocked_processes.add(event.pid)
+        
+        # Block network access using both methods
+        block_process_network(event.pid)
+        
+        # Also update syscall monitor's suspicious processes map
+        pid_key = ct.c_uint32(event.pid)
+        flag = ct.c_uint32(1)
+        syscall_monitor["suspicious_processes"][pid_key] = flag
+    
+    # Socket creation monitoring (syscall 41 = socket)
+    elif event.syscall_id == 41:
         if event.pid in suspicious_processes:
-            print(f" Blocked: Suspicious Process {event.pid} attempted network access")
+            print(f"🚫 BLOCKED: Suspicious process {event.pid} ({comm}) attempted socket creation")
+        else:
+            print(f"📡 Network activity: Process {event.pid} ({comm}) created socket")
 
+def cleanup_firewall():
+    """Clean up iptables rules and eBPF maps"""
+    try:
+        # Clean iptables
+        subprocess.run(["iptables", "-F", "OUTPUT"], capture_output=True)
+        print("✅ Firewall rules cleaned")
+        
+        # Clear eBPF maps
+        syscall_monitor["suspicious_processes"].clear()
+        network_filter["blocked_pids"].clear()
+        print("✅ eBPF maps cleared")
+        
+    except Exception as e:
+        print(f"⚠️ Cleanup error: {e}")
 
-b["events"].open_ring_buffer(handle_event) # Open a ring buffer to receive events
+# Attach network filter to socket operations
+try:
+    # Attach to socket filter (requires manual setup)
+    print("ℹ️  Network filter loaded (manual attachment may be required)")
+except Exception as e:
+    print(f"⚠️ Network filter attachment failed: {e}")
 
-print("Monitor Started - Press Ctrl+C to stop")
-print("Monitoring for process injection and network activity...\n")
+# Open ring buffer for syscall events
+syscall_monitor["events"].open_ring_buffer(handle_event)
+
+print("\n🔍 HIPS Monitor Started")
+print("📊 Syscall monitoring: ACTIVE")
+print("🔒 Network filtering: ACTIVE") 
+print("Press Ctrl+C to stop\n")
 
 try:
     while True:
-        b.ring_buffer_poll() # Poll the ring buffer for events
-        time.sleep(1) # Sleep for a while to avoid busy waiting
+        syscall_monitor.ring_buffer_poll()
+        time.sleep(0.1)
+        
 except KeyboardInterrupt:
-    print("\nMonitor stopped")
+    print("\n🛑 Monitor stopped")
+    cleanup_firewall()

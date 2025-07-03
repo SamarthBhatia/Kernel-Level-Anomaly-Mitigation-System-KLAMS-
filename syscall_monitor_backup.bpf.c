@@ -22,7 +22,7 @@ struct trace_event_raw_sys_enter {
 struct {
     __uint(type,BPF_MAP_TYPE_RINGBUF); // BPF_MAP_TYPE_RINGBUF is like a special container for events
     __uint(max_entries, 256*1024); //   Maximum size of the ring buffer
-} events SEC(".maps:"); // Marks this as a special storage area
+} events SEC(".maps"); // Marks this as a special storage area
 
 // Process State Tracking
 struct{

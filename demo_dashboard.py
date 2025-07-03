@@ -122,7 +122,7 @@ class HIPSDemo:
         def run_test():
             try:
                 result = subprocess.run(["curl", "-s", "--connect-timeout", "5", 
-                                       "http://example.com"], 
+                                       "http://gmail.com"], 
                                       capture_output=True, text=True)
                 if result.returncode == 0:
                     self.log_message("✅ Network test successful - connection allowed")
