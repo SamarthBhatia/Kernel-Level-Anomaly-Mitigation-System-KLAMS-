@@ -1,7 +1,8 @@
-#include "vmlinux.h"
 #include <linux/bpf.h>
+
 #include <bpf/bpf_helpers.h>
 #include <linux/ptrace.h>
+
 
 
 struct event{
@@ -9,6 +10,11 @@ struct event{
     __u32 syscall_id;          // User ID
     __u64 timestamp;    // Timestamp of the event
     char comm[16]; // Name of the syscall
+};
+
+struct trace_event_raw_sys_enter {
+    __u64 __unused;    /* common header */
+    __u64 args[6];     /* up to six syscall arguments */
 };
 
 
@@ -62,10 +68,10 @@ int trace_socket(struct trace_event_raw_sys_enter *ctx){
         e->pid = pid;
         e->syscall_id = 41; // 41 is the syscall number for socket
         e->timestamp = bpf_ktime_get_ns();
-        bpf_get_curr_comm(e->comm , sizeof(e->comm));
+        bpf_get_current_comm(e->comm , sizeof(e->comm));
         bpf_ringbuf_submit(e, 0);
     }
     return 0;
 }
 
-char LICENSE[] SEC("LICENSE") = "GPL"; // License for the BPF program, like a permission slip for using it
+//char LICENSE[] SEC("LICENSE") = "GPL"; // License for the BPF program, like a permission slip for using it

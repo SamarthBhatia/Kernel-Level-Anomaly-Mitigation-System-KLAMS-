@@ -3,7 +3,15 @@ from bcc import BPF
 import time
 from datetime import datetime
 
-b = BPF(src_file="syscall_monitor.bpf.c") # Load the BPF program from the C source file
+#b = BPF(src_file="syscall_monitor.bpf.c",allow_rlimit=False) # Load the BPF program from the C source file
+b = BPF(
+    src_file="syscall_monitor.bpf.c",
+    cflags=[
+      "-I/usr/include/bpf",                               # libbpf headers
+      "-I/lib/modules/$(uname -r)/build/include"          # kernel UAPI headers
+    ],
+    allow_rlimit=False
+)
 
 # Now Process Tracking
 suspicious_processes = set()  # Set to keep track of suspicious processes

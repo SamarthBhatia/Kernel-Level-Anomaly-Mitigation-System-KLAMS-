@@ -1,4 +1,4 @@
-#include "vmlinux.h"
+
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
 #include <linux/if_ether.h>
@@ -28,4 +28,4 @@ int socket_filter(struct __sk_buff *skb){  //struct __sk_buff *skb: Represents a
     return -1; // Allow the packet to pass through
 }
 
-char LICENSE[] SEC("license") = "GPL";
+//char LICENSE[] SEC("LICENSE") = "GPL";

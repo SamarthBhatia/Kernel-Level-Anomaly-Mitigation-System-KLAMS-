@@ -1,8 +1,10 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/uio.h>
 #include <string.h>
+#include <sys/wait.h>
 
 int main(){
     printf("Simulating Process Injection Attack..........");
@@ -41,9 +43,14 @@ int main(){
         printf(" Injection successful (%zd bytes written)\n", bytes);
         // Now try to make a network connection, shoudl be blocked 
         printf("Attempting network connection...\n");
-        system("curl -s http://example.com || echo 'Connection blocked!'");
+        system("curl -s http://google.com || echo 'Connection blocked!'");
     } else{
         printf("Injection failed, damn it");
     }
+
+    // Clean up child process
+    kill(target_pid, SIGTERM);
+    wait(NULL);
+
     return 0;
 }
