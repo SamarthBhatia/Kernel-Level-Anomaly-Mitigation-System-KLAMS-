@@ -4,7 +4,7 @@
 #include <uapi/linux/bpf.h>
 
 
-BPF_HASH(blocked_pids, u32, u32, 10024); // Hash map to store blocked PIDs
+BPF_HASH(blocked_pids, u32, u32, 1024); // Hash map to store blocked PIDs
 
 // Socket filter to block network traffic from suspicious processes
 int socket_filter(struct __sk_buff *skb){
@@ -30,3 +30,4 @@ int cgroup_skb_egress(struct __sk_buff *skb){
     }
     return 1;
 }
+
