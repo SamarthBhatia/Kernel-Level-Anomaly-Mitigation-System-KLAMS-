@@ -38,7 +38,11 @@ int main(){
     printf("Attempting process injection into PID %d...\n", target_pid);
 
     ssize_t bytes = process_vm_writev(target_pid, &local_iov, 1, &remote_iov, 1, 0);
-
+    printf("Process still running, trying network connection in 2 seconds...\n");
+    sleep(2);
+    printf("Attempting network connection...\n");
+    system("curl -s --connect-timeout 3 http://google.com || echo 'Connection blocked!'");
+    sleep(5);
     if (bytes > 0){
         printf(" Injection successful (%zd bytes written)\n", bytes);
         // Now try to make a network connection, shoudl be blocked 
